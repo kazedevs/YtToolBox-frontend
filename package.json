@@ -1,0 +1,24 @@
+{
+  "name": "youtube-toolbox",
+  "version": "1.0.0",
+  "description": "YouTube Toolbox - A collection of useful YouTube tools",
+  "private": true,
+  "workspaces": [
+    "yttoolbox",
+    "server"
+  ],
+  "scripts": {
+    "start": "concurrently \"cd yttoolbox && npm start\" \"cd server && npm run dev\"",
+    "build": "cd yttoolbox && npm run build && cd ../server && npm run build",
+    "dev": "concurrently \"cd yttoolbox && npm start\" \"cd server && npm run dev\"",
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "dependencies": {
+    "recoil": "^0.7.7"
+  },
+  "devDependencies": {
+    "axios": "^1.11.0",
+    "concurrently": "^8.2.2",
+    "prettier": "^3.6.2"
+  }
+}
