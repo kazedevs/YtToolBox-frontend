@@ -1,9 +1,11 @@
-import express, { Express, Request, Response, NextFunction } from "express";
+import express, { Request, Response, NextFunction } from "express";
 import cors from "cors";
 import helmet from "helmet";
 import rateLimit from "express-rate-limit";
-import { Innertube } from "youtubei.js";
 import dotenv from "dotenv";
+import path from "path";
+import { fileURLToPath } from "url";
+import { Innertube } from "youtubei.js";
 
 // Type definitions for Express Response extensions
 declare global {
@@ -32,7 +34,12 @@ dotenv.config();
 let innertube: any;
 
 const initializeInnertube = async () => {
-  innertube = await Innertube.create();
+  try {
+    innertube = await Innertube.create();
+    console.log("Innertube initialized successfully");
+  } catch (error) {
+    console.error("Failed to initialize Innertube:", error);
+  }
 };
 
 initializeInnertube();
@@ -96,11 +103,23 @@ interface VideoInfo {
   is_family_safe: boolean;
 }
 
-const app: Express = express();
+const app: express.Application = express();
 const PORT = process.env["PORT"] || 5000;
 
 // Vercel compatibility - use provided port or default
-const isVercel = process.env.VERCEL === "1";
+const isVercel = !!process.env["VERCEL"];
+
+// Get __dirname equivalent in ES modules
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+
+// Serve static files from the React app
+app.use(express.static(path.join(__dirname, "../../yttoolbox/dist")));
+
+// Serve the React app for the root route
+app.get("/", (_req: Request, res: Response) => {
+  res.sendFile(path.join(__dirname, "../../yttoolbox/dist/index.html"));
+});
 
 // Security Middleware
 const limiter = rateLimit({
@@ -797,6 +816,11 @@ app.use((_req: Request, res: Response, next: NextFunction) => {
 app.use((error: Error, _req: Request, res: Response, _next: NextFunction) => {
   console.error("Error:", error);
   res.status(500).json({ error: "Internal server error" });
+});
+
+// Catch all route to serve React app for client-side routing
+app.get("*", (_req: Request, res: Response) => {
+  res.sendFile(path.join(__dirname, "../../yttoolbox/dist/index.html"));
 });
 
 // 404 handler
