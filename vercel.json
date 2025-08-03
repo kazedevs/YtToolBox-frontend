@@ -4,15 +4,24 @@
     {
       "src": "server/src/server.ts",
       "use": "@vercel/node"
+    },
+    {
+      "src": "yttoolbox/dist/**/*",
+      "use": "@vercel/static"
     }
   ],
   "routes": [
     {
       "src": "/api/(.*)",
       "dest": "server/src/server.ts"
+    },
+    {
+      "src": "/(.*)",
+      "dest": "/yttoolbox/dist/index.html"
     }
   ],
   "env": {
-    "NODE_ENV": "production"
+    "NODE_ENV": "production",
+    "CORS_ORIGIN": "https://www.yttoolbox.com,https://yttoolbox.com"
   }
 }
