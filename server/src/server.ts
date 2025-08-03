@@ -1,13 +1,29 @@
-import express from "express";
-import type { Request, Response } from "express";
+import express, { Express, Request, Response, NextFunction } from "express";
 import cors from "cors";
-// Security packages - using require to avoid type issues
-const helmet = require("helmet");
-const rateLimit = require("express-rate-limit");
+import helmet from "helmet";
+import rateLimit from "express-rate-limit";
 import { Innertube } from "youtubei.js";
-import axios from "axios";
 import dotenv from "dotenv";
-import path from "path";
+
+// Type definitions for Express Response extensions
+declare global {
+  namespace Express {
+    interface Response {
+      json: (body?: any) => Response;
+      status: (code: number) => Response;
+      setHeader: (name: string, value: string | string[]) => void;
+      removeHeader: (name: string) => void;
+    }
+    interface Request {
+      query: {
+        url?: string;
+        videoUrl?: string;
+        channelUrl?: string;
+        [key: string]: string | undefined;
+      };
+    }
+  }
+}
 
 // Load environment variables
 dotenv.config();
@@ -21,35 +37,19 @@ const initializeInnertube = async () => {
 
 initializeInnertube();
 
-const getVideoId = (url: string) => {
+const getVideoId = (url: string): string | null => {
   const regExp = /^.*(youtu.be\/|v\/|u\/\w\/|embed\/|watch\?v=|&v=)([^#&?]*).*/;
   const match = url.match(regExp);
   return match && match[2].length === 11 ? match[2] : null;
 };
 
-const getChannelId = (url: string) => {
-  // For channel URLs like https://www.youtube.com/channel/UC...
-  const channelRegExp = /youtube\.com\/channel\/([^/]*)/;
-  const userRegExp = /youtube\.com\/user\/([^/]*)/;
-  const customRegExp = /youtube\.com\/c\/([^/]*)/;
-
-  let match = url.match(channelRegExp);
-  if (match) return match[1];
-
-  match = url.match(userRegExp);
-  if (match) return match[1];
-
-  match = url.match(customRegExp);
-  if (match) return match[1];
-
-  return null;
-};
-
-const validateURL = (url: string) => {
+// Function to validate YouTube URL
+export const validateURL = (url: string): boolean => {
   return getVideoId(url) !== null;
 };
 
-const getInfo = async (url: string) => {
+// Function to get video info
+export const getVideoInfo = async (url: string) => {
   const videoId = getVideoId(url);
   if (!videoId) {
     throw new Error("Invalid YouTube URL");
@@ -64,27 +64,39 @@ interface Thumbnail {
   height: number;
 }
 
-interface VideoInfo {
-  title: string;
-  description: string;
-  duration: string;
-  viewCount: string;
-  likeCount: string;
-  thumbnail: string;
-}
-
-interface Comment {
-  author: string;
-  text: string;
-  likes: number;
-  publishedAt: string;
-}
-
 interface Thumbnails {
   [key: string]: Thumbnail;
 }
 
-const app = express();
+interface VideoInfo {
+  title: string;
+  description: string;
+  thumbnails: Thumbnails;
+  owner_channel_name: string;
+  view_count: string;
+  like_count: string;
+  comment_count: string;
+  upload_date: string;
+  duration: string;
+  keywords: string[];
+  channel_id: string;
+  is_live: boolean;
+  is_upcoming: boolean;
+  is_crawlable: boolean;
+  is_private: boolean;
+  is_unplugged_corpus: boolean;
+  is_live_content: boolean;
+  is_post_live_dvr: boolean;
+  is_reel: boolean;
+  is_short: boolean;
+  is_live_now: boolean;
+  is_owner_viewing: boolean;
+  allow_ratings: boolean;
+  is_unlisted: boolean;
+  is_family_safe: boolean;
+}
+
+const app: Express = express();
 const PORT = process.env["PORT"] || 5000;
 
 // Vercel compatibility - use provided port or default
@@ -146,8 +158,8 @@ app.use(cors(corsOptions));
 app.use(express.json({ limit: "10mb" }));
 app.use(express.urlencoded({ extended: true, limit: "10mb" }));
 
-// Root route - show available endpoints
-app.get("/", (req: Request, res: Response) => {
+// Health check endpoint
+app.get("/api/health", (_req: Request, res: Response) => {
   res.json({
     message: "YouTube Toolbox API Server",
     version: "1.0.0",
@@ -182,7 +194,6 @@ app.get("/api/title", async (req: Request, res: Response): Promise<void> => {
     const title = info.basic_info.title || "Untitled Video";
     const description =
       info.basic_info.short_description || "No description available";
-    const channel = info.basic_info.author || "Unknown channel";
     const views = info.basic_info.view_count?.toString() || "0";
     const thumbnail = info.basic_info.thumbnail?.[0]?.url || null;
 
@@ -201,6 +212,28 @@ app.get("/api/title", async (req: Request, res: Response): Promise<void> => {
 });
 
 // 3. Banner Downloader
+app.get("/api/channel-info", async (req: Request, res: Response) => {
+  const { channelUrl } = req.query;
+  if (!channelUrl || typeof channelUrl !== 'string') {
+    res.status(400).json({ error: "Valid channel URL is required" });
+    return;
+  }
+  
+  try {
+    const channelData = await innertube.getChannel(channelUrl);
+    if (!channelData) {
+      res.status(400).json({ error: "Invalid YouTube channel URL" });
+      return;
+    }
+
+    res.json(channelData);
+  } catch (error) {
+    console.error("Error fetching channel info:", error);
+    res.status(500).json({ error: "Failed to fetch channel information" });
+  }
+});
+
+// 3. Banner Downloader
 app.get("/api/banner", async (req: Request, res: Response): Promise<void> => {
   try {
     const { url } = req.query;
@@ -211,7 +244,6 @@ app.get("/api/banner", async (req: Request, res: Response): Promise<void> => {
       return;
     }
 
-    let channelInfo: any;
     const urlString = url.toString().trim();
     if (urlString.length > 500) {
       res.status(400).json({ error: "URL too long" });
@@ -384,17 +416,18 @@ app.get("/api/banner", async (req: Request, res: Response): Promise<void> => {
     }
 
     // Try to get channel info
+    let channelInfo;
     try {
       console.log("Attempting to get channel with:", channelIdOrName);
       channelInfo = await innertube.getChannel(channelIdOrName);
       console.log("Channel info retrieved successfully");
+      
+      if (!channelInfo) {
+        res.status(400).json({ error: "Invalid YouTube channel URL" });
+        return;
+      }
     } catch (error) {
       console.error("Channel lookup error:", error);
-      res.status(400).json({ error: "Invalid YouTube channel URL" });
-      return;
-    }
-
-    if (!channelInfo) {
       res.status(400).json({ error: "Invalid YouTube channel URL" });
       return;
     }
@@ -405,17 +438,20 @@ app.get("/api/banner", async (req: Request, res: Response): Promise<void> => {
     try {
       // Get the channel object and access its home page for banner data
       const channel = await innertube.getChannel(channelIdOrName);
-      const home = await channel.getHome();
-
-      // Access banner from home page header
-      if (
-        home.header?.content?.banner?.image &&
-        Array.isArray(home.header.content.banner.image)
-      ) {
-        banner = home.header.content.banner.image[0]?.url || null;
+      if (channel) {
+        const home = await channel.getHome();
+        
+        // Access banner from home page header
+        if (
+          home?.header?.content?.banner?.image &&
+          Array.isArray(home.header.content.banner.image) &&
+          home.header.content.banner.image.length > 0
+        ) {
+          banner = home.header.content.banner.image[0].url;
+        }
       }
-    } catch (e: any) {
-      console.error("Banner extraction error:", e.message);
+    } catch (error) {
+      console.error("Banner extraction error:", error instanceof Error ? error.message : String(error));
     }
 
     console.log("Banner extraction result:", banner);
@@ -745,7 +781,7 @@ app.get("/api/pfp", async (req: Request, res: Response): Promise<void> => {
 });
 
 // Security Headers
-app.use((req: Request, res: Response, next) => {
+app.use((_req: Request, res: Response, next: NextFunction) => {
   res.removeHeader("X-Powered-By");
   res.setHeader("X-Content-Type-Options", "nosniff");
   res.setHeader("X-Frame-Options", "DENY");
@@ -758,7 +794,7 @@ app.use((req: Request, res: Response, next) => {
 });
 
 // Error handling middleware
-app.use((error: Error, req: Request, res: Response, next: Function) => {
+app.use((error: Error, _req: Request, res: Response, _next: NextFunction) => {
   console.error("Error:", error);
   res.status(500).json({ error: "Internal server error" });
 });
@@ -770,12 +806,24 @@ app.use((req: Request, res: Response) => {
 
 // Start server for local development
 if (!isVercel) {
-  // Graceful shutdown for non-Vercel environments
+  // Start the server
   const server = app.listen(PORT, () => {
-    console.log(`Server running securely on http://localhost:${PORT}`);
-    console.log(`Environment: ${process.env.NODE_ENV || "development"}`);
+    console.log(`Server is running on port ${PORT}`);
   });
 
+  // Handle unhandled promise rejections
+  process.on("unhandledRejection", (err: Error) => {
+    console.error("Unhandled Rejection:", err);
+    server.close(() => process.exit(1));
+  });
+
+  // Handle uncaught exceptions
+  process.on("uncaughtException", (err: Error) => {
+    console.error("Uncaught Exception:", err);
+    server.close(() => process.exit(1));
+  });
+
+  // Handle graceful shutdown
   process.on("SIGTERM", () => {
     console.log("SIGTERM received, shutting down gracefully");
     server.close(() => {
@@ -783,15 +831,10 @@ if (!isVercel) {
       process.exit(0);
     });
   });
-
-  process.on("SIGINT", () => {
-    console.log("SIGINT received, shutting down gracefully");
-    server.close(() => {
-      console.log("Process terminated");
-      process.exit(0);
-    });
-  });
 }
 
-// Export for Vercel
+// Export types for reuse
+export type { VideoInfo, Thumbnail, Thumbnails };
+
+// Export the app for Vercel
 export default app;
