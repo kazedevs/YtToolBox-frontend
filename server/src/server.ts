@@ -482,18 +482,46 @@ app.get(
   async (req: Request, res: Response): Promise<void> => {
     try {
       const { url } = req.query;
-      if (!url) {
-        res.status(400).json({ error: "YouTube URL is required" });
+      
+      // Validate URL parameter
+      if (!url || typeof url !== 'string') {
+        res.status(400).json({ 
+          error: "YouTube URL is required",
+          success: false 
+        });
         return;
       }
 
-      const videoId = getVideoId(url as string);
+      // Validate YouTube URL format
+      const videoId = getVideoId(url);
       if (!videoId) {
-        res.status(400).json({ error: "Invalid YouTube URL" });
+        res.status(400).json({ 
+          error: "Invalid YouTube URL format",
+          success: false 
+        });
+        return;
+      }
+
+      // Check if innertube is initialized
+      if (!innertube) {
+        res.status(503).json({ 
+          error: "Service temporarily unavailable",
+          success: false 
+        });
         return;
       }
 
       const info = await innertube.getBasicInfo(videoId);
+      
+      // Ensure we have basic info
+      if (!info || !info.basic_info) {
+        res.status(404).json({ 
+          error: "Video not found",
+          success: false 
+        });
+        return;
+      }
+
       const thumbnails = info.basic_info.thumbnail || [];
 
       // Convert thumbnails to our format
@@ -503,17 +531,44 @@ app.get(
         height: thumb.height || 0,
       }));
 
+      // Sort by resolution (highest first)
       const sortedThumbnails: Thumbnail[] = [...formattedThumbnails].sort(
-        (a: Thumbnail, b: Thumbnail) => b.width * b.height - a.width * a.height
+        (a: Thumbnail, b: Thumbnail) => (b.width * b.height) - (a.width * a.height)
       );
 
+      // Return successful response
       res.json({
+        success: true,
         thumbnails: sortedThumbnails,
         title: info.basic_info.title || "Untitled Video",
+        videoId: videoId
       });
-    } catch (error) {
-      console.error("Error:", error);
-      res.status(500).json({ error: "Failed to fetch thumbnails" });
+
+    } catch (error: any) {
+      console.error("Thumbnail API Error:", error);
+      
+      // Handle specific error types
+      if (error.message?.includes('Private video')) {
+        res.status(403).json({ 
+          error: "This video is private",
+          success: false 
+        });
+        return;
+      }
+      
+      if (error.message?.includes('Video unavailable')) {
+        res.status(404).json({ 
+          error: "Video not found or unavailable",
+          success: false 
+        });
+        return;
+      }
+
+      // Generic error response
+      res.status(500).json({ 
+        error: "Failed to fetch thumbnails",
+        success: false 
+      });
     }
   }
 );

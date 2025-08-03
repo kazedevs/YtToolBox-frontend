@@ -48,9 +48,15 @@ const ThumbnailDownloader = () => {
 
     try {
       // Call our server API to download thumbnails
-      const response = await fetch(
-        `${API_BASE_URL}/api/thumbnail?url=${encodeURIComponent(videoUrl)}`
-      );
+      const apiUrl = new URL('/api/thumbnail', API_BASE_URL);
+      apiUrl.searchParams.set('url', videoUrl);
+      const response = await fetch(apiUrl.toString());
+
+      // Check if response is JSON
+      const contentType = response.headers.get('content-type');
+      if (!contentType || !contentType.includes('application/json')) {
+        throw new Error('Server returned invalid response format');
+      }
 
       if (!response.ok) {
         const errorData = await response.json();
@@ -58,16 +64,30 @@ const ThumbnailDownloader = () => {
       }
 
       const data = await response.json();
+      
+      // Validate response structure
+      if (!data || typeof data !== 'object') {
+        throw new Error('Invalid response format from server');
+      }
+      
       setThumbnails(data.thumbnails || []);
       setVideoTitle(data.title || "");
     } catch (err: unknown) {
+      console.error('Thumbnail download error:', err);
+      
       if (err instanceof Error) {
-        setError(
-          err.message || "An error occurred while extracting thumbnails"
-        );
+        // Handle network errors
+        if (err.message.includes('Failed to fetch')) {
+          setError('Network error: Please check your internet connection');
+        } else if (err.message.includes('JSON')) {
+          setError('Server error: Invalid response format received');
+        } else {
+          setError(err.message || "An error occurred while extracting thumbnails");
+        }
       } else {
-        setError("An error occurred while extracting thumbnails");
+        setError("An unexpected error occurred while extracting thumbnails");
       }
+      
       setThumbnails([]);
       setVideoTitle("");
     } finally {
