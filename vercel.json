@@ -3,11 +3,17 @@
   "builds": [
     {
       "src": "server/src/server.ts",
-      "use": "@vercel/node"
+      "use": "@vercel/node",
+      "config": {
+        "includeFiles": ["server/dist/**"]
+      }
     },
     {
       "src": "yttoolbox/dist/**/*",
-      "use": "@vercel/static"
+      "use": "@vercel/static",
+      "config": {
+        "distDir": "yttoolbox/dist"
+      }
     }
   ],
   "routes": [
