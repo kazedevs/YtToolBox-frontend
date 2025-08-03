@@ -27,7 +27,7 @@
     "composite": true,
     "incremental": true
   },
-  "include": ["src", "vite.config.ts"],
+  "include": ["src"],
   "exclude": ["node_modules", "dist"],
   "references": [
     { "path": "./tsconfig.app.json" },
