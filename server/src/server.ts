@@ -3,8 +3,6 @@ import cors from "cors";
 import helmet from "helmet";
 import rateLimit from "express-rate-limit";
 import dotenv from "dotenv";
-import path from "path";
-import { fileURLToPath } from "url";
 import { Innertube } from "youtubei.js";
 
 // Type definitions for Express Response extensions
@@ -108,18 +106,6 @@ const PORT = process.env["PORT"] || 5000;
 
 // Vercel compatibility - use provided port or default
 const isVercel = !!process.env["VERCEL"];
-
-// Get __dirname equivalent in ES modules
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename);
-
-// Serve static files from the React app
-app.use(express.static(path.join(__dirname, "../../yttoolbox/dist")));
-
-// Serve the React app for the root route
-app.get("/", (_req: Request, res: Response) => {
-  res.sendFile(path.join(__dirname, "../../yttoolbox/dist/index.html"));
-});
 
 // Security Middleware
 const limiter = rateLimit({
@@ -816,11 +802,6 @@ app.use((_req: Request, res: Response, next: NextFunction) => {
 app.use((error: Error, _req: Request, res: Response, _next: NextFunction) => {
   console.error("Error:", error);
   res.status(500).json({ error: "Internal server error" });
-});
-
-// Catch all route to serve React app for client-side routing
-app.get("*", (_req: Request, res: Response) => {
-  res.sendFile(path.join(__dirname, "../../yttoolbox/dist/index.html"));
 });
 
 // 404 handler
