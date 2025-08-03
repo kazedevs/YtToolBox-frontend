@@ -1,4 +1,4 @@
-import express, { type Request, type Response, type NextFunction } from "express";
+import express, { Application, Request, Response, NextFunction } from 'express';
 import cors from "cors";
 import helmet from "helmet";
 import rateLimit from "express-rate-limit";
@@ -101,7 +101,7 @@ interface VideoInfo {
   is_family_safe: boolean;
 }
 
-const app: express.Application = express();
+const app: Application = express();
 const PORT = process.env["PORT"] || 5000;
 
 // Vercel compatibility - use provided port or default
