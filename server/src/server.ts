@@ -800,7 +800,7 @@ app.use((error: Error, _req: Request, res: Response, _next: NextFunction) => {
 });
 
 // 404 handler
-app.use((req: Request, res: Response) => {
+app.use((_req: Request, res: Response) => {
   res.status(404).json({ error: "Endpoint not found" });
 });
 

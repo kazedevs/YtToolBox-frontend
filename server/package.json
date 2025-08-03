@@ -22,7 +22,7 @@
   "dependencies": {
     "@types/cors": "^2.8.17",
     "@types/express": "^4.17.21",
-    "@types/express-rate-limit": "^1.7.3-0",
+    "@types/express-rate-limit": "^6.0.2",
     "@types/node": "^20.11.28",
     "axios": "^1.11.0",
     "cors": "^2.8.5",
@@ -36,7 +36,7 @@
     "@types/cors": "^2.8.19",
     "@types/express": "^4.17.21",
     "@types/node": "^20.0.0",
-    "@types/helmet": "^0.0.0",
+    "@types/helmet": "^4.0.0",
     "@typescript-eslint/eslint-plugin": "^7.2.0",
     "@typescript-eslint/parser": "^7.2.0",
     "eslint": "^8.57.0",
