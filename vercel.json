@@ -2,24 +2,27 @@
   "version": 2,
   "builds": [
     {
-      "src": "server/src/server.ts",
-      "use": "@vercel/node",
-      "config": {
-        "includeFiles": ["server/dist/**"]
-      }
+      "src": "yttoolbox/package.json",
+      "use": "@vercel/static-build",
+      "config": { "distDir": "dist" }
     },
     {
-      "src": "yttoolbox/dist/**/*",
-      "use": "@vercel/static",
-      "config": {
-        "distDir": "yttoolbox/dist"
-      }
+      "src": "server/src/server.ts",
+      "use": "@vercel/node"
     }
   ],
   "routes": [
     {
       "src": "/api/(.*)",
-      "dest": "server/src/server.ts"
+      "dest": "/server/src/server.ts"
+    },
+    {
+      "src": "/assets/(.*)",
+      "dest": "/yttoolbox/dist/assets/$1"
+    },
+    {
+      "src": "/sw.js",
+      "dest": "/yttoolbox/dist/sw.js"
     },
     {
       "src": "/(.*)",
